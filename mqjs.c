@@ -35,6 +35,10 @@
 #include <math.h>
 #include <fcntl.h>
 
+#ifdef BFLB_SDK
+#include "bflb_mtimer.h"
+#endif
+
 #include "cutils.h"
 #include "readline_tty.h"
 #include "mquickjs.h"
@@ -71,6 +75,23 @@ static JSValue js_gc(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
     return JS_UNDEFINED;
 }
 
+#ifdef BFLB_SDK
+/* Bouffalo SDK time functions using mtimer */
+static int64_t get_time_ms(void)
+{
+    return (int64_t)bflb_mtimer_get_time_ms();
+}
+
+static JSValue js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
+{
+    return JS_NewInt64(ctx, (int64_t)bflb_mtimer_get_time_ms());
+}
+
+static JSValue js_performance_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
+{
+    return JS_NewInt64(ctx, (int64_t)bflb_mtimer_get_time_ms());
+}
+#else
 #if defined(__linux__) || defined(__APPLE__)
 static int64_t get_time_ms(void)
 {
@@ -98,6 +119,7 @@ static JSValue js_performance_now(JSContext *ctx, JSValue *this_val, int argc, J
 {
     return JS_NewInt64(ctx, get_time_ms());
 }
+#endif /* BFLB_SDK */
 
 /* load a script */
 static JSValue js_load(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
@@ -730,9 +752,15 @@ int main(int argc, const char **argv)
         ctx = JS_NewContext(mem_buf, mem_size, &js_stdlib);
         JS_SetLogFunc(ctx, js_log_func);
         {
+#ifdef BFLB_SDK
+            /* Use mtimer for random seed */
+            uint64_t time_us = bflb_mtimer_get_time_us();
+            JS_SetRandomSeed(ctx, time_us ^ (time_us >> 32));
+#else
             struct timeval tv;
             gettimeofday(&tv, NULL);
             JS_SetRandomSeed(ctx, ((uint64_t)tv.tv_sec << 32) ^ tv.tv_usec);
+#endif
         }
 
         for(i = 0; i < include_count; i++) {

@@ -35,6 +35,10 @@
 #include <math.h>
 #include <fcntl.h>
 
+#ifdef BFLB_SDK
+#include "bflb_mtimer.h"
+#endif
+
 #include "cutils.h"
 #include "mquickjs.h"
 
@@ -191,6 +195,23 @@ static JSValue js_print(JSContext *ctx, JSValue *this_val, int argc, JSValue *ar
     return JS_UNDEFINED;
 }
 
+#ifdef BFLB_SDK
+/* Bouffalo SDK time functions using mtimer */
+static int64_t get_time_ms(void)
+{
+    return (int64_t)bflb_mtimer_get_time_ms();
+}
+
+static JSValue js_date_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
+{
+    return JS_NewInt64(ctx, (int64_t)bflb_mtimer_get_time_ms());
+}
+
+static JSValue js_performance_now(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv)
+{
+    return JS_NewInt64(ctx, (int64_t)bflb_mtimer_get_time_ms());
+}
+#else
 #if defined(__linux__) || defined(__APPLE__)
 static int64_t get_time_ms(void)
 {
@@ -218,6 +239,7 @@ static JSValue js_performance_now(JSContext *ctx, JSValue *this_val, int argc, J
 {
     return JS_NewInt64(ctx, get_time_ms());
 }
+#endif /* BFLB_SDK */
 
 #include "example_stdlib.h"
 

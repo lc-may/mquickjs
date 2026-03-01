@@ -1,6 +1,144 @@
 MicroQuickJS
 ============
 
+---
+
+# Bouffalo SDK Quick Start
+
+This example integrates Bouffalo Lab SDK for BL616/BL618 chips. Below is the **build, modify, and test** workflow.
+
+## 1. Building
+
+### Prerequisites: Generate Headers
+
+Generate `mqjs_stdlib.h` and `mquickjs_atom.h` on the host before building for the target:
+
+```bash
+cd examples/mquickjs
+
+# Build with standalone Makefile on host
+make -f Makefile.standalone mqjs_stdlib
+
+# Generate headers
+./mqjs_stdlib > mqjs_stdlib.h
+./mqjs_stdlib -a > mquickjs_atom.h
+```
+
+### SDK Configuration
+
+Ensure the following are enabled in `defconfig` (usually configured by default):
+- `CONFIG_NEWLIB=y` - Newlib C library
+- `CONFIG_NEWLIB_LITTLEFS=y` - LittleFS POSIX port
+- `CONFIG_FREERTOS=y` - FreeRTOS
+- `CONFIG_SHELL=y` - Shell for interactive commands
+- `CONFIG_LITTLEFS=y` - LittleFS file system
+
+### Build Commands
+
+```bash
+cd examples/mquickjs
+make CHIP=bl616 BOARD=bl616dk
+```
+
+### Flashing
+
+```bash
+make flash CHIP=bl616 COMX=/dev/ttyUSB0
+```
+
+## 2. Modification
+
+| File | Purpose |
+|------|----------|
+| `main.c` | LittleFS partition name `LFS_PARTITION_NAME`, mount point `LFS_MOUNT_POINT`, LFS shell commands |
+| `bouffalo_mquickjs.c` | `JS_MEM_SIZE`, `JS_TASK_STACK_SIZE`, `JS_MAX_SCRIPT_SIZE`, custom JS APIs (print, load, setTimeout, etc.) |
+| `defconfig` | SDK component switches (NEWLIB, LITTLEFS, FREERTOS, SHELL, etc.) |
+| `CMakeLists.txt` | Source files, compile definitions, stack size, etc. |
+
+## 3. Testing
+
+### Deploy JS Files to LittleFS
+
+**Option 1: pack_js_media.sh** (recommended)
+
+Pack scripts from `tests/` and `tests2/` into a LittleFS image and flash to the media partition:
+
+```bash
+# Pack tests/ and flash
+./pack_js_media.sh tests --flash /dev/ttyUSB0
+
+# Pack only, no flash (generates media_lfs.bin)
+./pack_js_media.sh tests
+```
+
+**Option 2: Serial lfs_write**
+
+```
+bl616> lfs_write hello.js "print('Hello');"
+```
+
+### Run Tests
+
+| Command | Description | Example |
+|---------|-------------|----------|
+| `js_run <file>` | Run JS file from LittleFS | `js_run /lfs/test_rect.js` |
+| `js_eval "<expr>"` | Evaluate JS expression | `js_eval "print(1+2)"` |
+| `js_status` | Show VM status | `js_status` |
+| `js_info` | Show VM configuration | `js_info` |
+
+Common test scripts: `tests/test_rect.js`, `tests2/run_es5.js`, etc.
+
+## Command Reference
+
+**JS commands** (bouffalo_mquickjs.c): `js_run`, `js_eval`, `js_status`, `js_info`
+
+**LFS commands** (main.c): `lfs_ls`, `lfs_cat`, `lfs_write`, `lfs_rm`, `lfs_mkdir`, `lfs_info`, `lfs_cd`, `lfs_pwd`
+
+## Memory Configuration
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| JS Heap | 64 KB | Memory for JS objects (`JS_MEM_SIZE` in bouffalo_mquickjs.c) |
+| Task Stack | 8 KB | JS VM task stack (`JS_TASK_STACK_SIZE`) |
+| Max Script | 32 KB | Maximum script file size (`JS_MAX_SCRIPT_SIZE`) |
+
+## Architecture Overview
+
+- **main.c**: `board_init` → LittleFS init → `bouffalo_mquickjs_init` → Shell
+- **bouffalo_mquickjs.c**: JS VM in dedicated FreeRTOS task, request queue, shell commands, `print`/`load`/`Date.now`, etc.
+
+The JS VM runs in a dedicated task and receives `js_run` requests via a queue; file loading uses the LittleFS POSIX port; time functions use `bflb_mtimer`.
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `Makefile` | SDK build entry point |
+| `Makefile.standalone` | Host build for header generation |
+| `pack_js_media.sh` | Pack tests into LittleFS image and flash |
+| `CMakeLists.txt` | CMake configuration |
+| `main.c` | Entry point, LittleFS, Shell |
+| `bouffalo_mquickjs.c` | JS VM task and commands |
+| `defconfig` | SDK configuration |
+| `mqjs_stdlib.h` | Generated stdlib header |
+| `mquickjs_atom.h` | Generated atom table |
+
+## Troubleshooting
+
+**Build Error: `mqjs_stdlib.h` not found**
+
+Generate the headers first by following the "Prerequisites: Generate Headers" steps.
+
+**Memory Allocation Failed**
+
+Reduce `JS_MEM_SIZE` in `bouffalo_mquickjs.c`, or increase `configTOTAL_HEAP_SIZE` in `FreeRTOSConfig.h`.
+
+**Stack Overflow**
+
+Increase `JS_TASK_STACK_SIZE` in `bouffalo_mquickjs.c`.
+
+---
+
 ## Introduction
 
 MicroQuickJS (aka. MQuickJS) is a JavaScript engine targeted at
@@ -375,4 +513,5 @@ MQuickJS is released under the MIT license.
 
 Unless otherwise specified, the MQuickJS sources are copyright Fabrice
 Bellard and Charlie Gordon.
+
 
